@@ -1,0 +1,59 @@
+{
+  "name": "star-rating-x",
+  "version": "1.0.0",
+  "description": "A fully-featured, accessible, customisable React star-rating component with themes, shapes, animations and half-star precision.",
+  "keywords": [
+    "react",
+    "rating",
+    "star",
+    "stars",
+    "star-rating",
+    "review",
+    "accessible",
+    "customisable",
+    "typescript"
+  ],
+  "author": "Abdelrahman Ayman",
+  "license": "MIT",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.cjs.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "scripts": {
+    "build": "rollup -c rollup.config.js",
+    "dev": "rollup -c rollup.config.js --watch",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": ">=17.0.0",
+    "react-dom": ">=17.0.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.0",
+    "@babel/preset-env": "^7.29.3",
+    "@babel/preset-react": "^7.28.5",
+    "@rollup/plugin-babel": "^6.1.0",
+    "@rollup/plugin-commonjs": "^25.0.8",
+    "@rollup/plugin-node-resolve": "^15.3.1",
+    "rollup": "^4.60.2",
+    "rollup-plugin-peer-deps-external": "^2.2.4",
+    "rollup-plugin-postcss": "^4.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Abdelrahman968/star-rating-x"
+  }
+}
