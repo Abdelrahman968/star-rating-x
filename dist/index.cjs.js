@@ -85,10 +85,12 @@ function getThemeVars(themeName = "gold") {
 const THEME_NAMES = Object.keys(themes);
 
 const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
+  // state
   value: controlledValue,
   defaultValue = 0,
   count = 5,
   precision = 1,
+  // appearance
   size = 32,
   gap = 6,
   shape = "star",
@@ -97,6 +99,16 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
   filledColor,
   strokeColor,
   strokeWidth = 1.5,
+  // NEW: custom icon / character
+  character,
+  // emoji/text/render-fn — renders instead of SVG
+  customIcon,
+  // SVG path string or render-fn — replaces built-in shape
+
+  // NEW: mount animation
+  mountAnimation = false,
+  mountDuration = 800,
+  // behaviour
   readOnly = false,
   disabled = false,
   allowClear = true,
@@ -104,20 +116,46 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
   tooltips,
   animation = "bounce",
   direction = "ltr",
+  highlightSelected = false,
+  // callbacks
   onChange,
   onHoverChange,
-  highlightSelected = false,
+  // a11y
   label = "Rating",
   className = "",
   style = {}
 }, ref) {
   const uid = react.useId();
+
+  // ── state ──────────────────────────────────────────────────────────────────
   const isControlled = controlledValue !== undefined;
   const [internalValue, setInternalValue] = react.useState(defaultValue);
   const currentValue = isControlled ? controlledValue : internalValue;
   const [hoverValue, setHoverValue] = react.useState(null);
-  const [activeIndex, setActiveIndex] = react.useState(null); // for animation
-  react.useRef(null);
+  const [activeIndex, setActiveIndex] = react.useState(null);
+
+  // mount animation: animatedValue goes from 0 → currentValue on first render
+  const [animatedValue, setAnimatedValue] = react.useState(mountAnimation ? 0 : null);
+  react.useEffect(() => {
+    if (!mountAnimation) return;
+    const target = currentValue;
+    const steps = 30;
+    const interval = mountDuration / steps;
+    let step = 0;
+    const id = setInterval(() => {
+      step++;
+      setAnimatedValue(+(target * (step / steps)).toFixed(2));
+      if (step >= steps) {
+        setAnimatedValue(target);
+        clearInterval(id);
+      }
+    }, interval);
+    return () => clearInterval(id);
+    // intentionally run only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── theme / colours ────────────────────────────────────────────────────────
   const themeVars = getThemeVars(theme);
   const resolvedFilled = filledColor || themeVars.filled;
   const resolvedEmpty = emptyColor || themeVars.empty;
@@ -125,17 +163,12 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
   const sizeNum = typeof size === "number" ? size : parseInt(size, 10);
 
   // ── value helpers ──────────────────────────────────────────────────────────
-  const snapValue = react.useCallback(raw => {
-    if (precision === 0.5) return Math.round(raw * 2) / 2;
-    return Math.round(raw);
-  }, [precision]);
+  const snapValue = react.useCallback(raw => precision === 0.5 ? Math.round(raw * 2) / 2 : Math.round(raw), [precision]);
   const getValueFromPointer = react.useCallback((e, index) => {
     if (precision === 1) return index + 1;
     const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const half = x < rect.width / 2;
-    const raw = index + (half ? 0.5 : 1);
-    return snapValue(raw);
+    const half = e.clientX - rect.left < rect.width / 2;
+    return snapValue(index + (half ? 0.5 : 1));
   }, [precision, snapValue]);
 
   // ── interaction handlers ───────────────────────────────────────────────────
@@ -155,12 +188,10 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
     const val = getValueFromPointer(e, index);
     const next = allowClear && val === currentValue ? 0 : val;
     setActiveIndex(index);
-    setTimeout(() => setActiveIndex(null), 400);
+    setTimeout(() => setActiveIndex(null), 500);
     if (!isControlled) setInternalValue(next);
     onChange?.(next);
   }, [readOnly, disabled, getValueFromPointer, allowClear, currentValue, isControlled, onChange]);
-
-  // keyboard support
   const handleKeyDown = react.useCallback(e => {
     if (readOnly || disabled) return;
     const step = precision;
@@ -171,22 +202,96 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
     onChange?.(next);
   }, [readOnly, disabled, precision, currentValue, count, isControlled, onChange]);
 
-  // ── rendering helpers ──────────────────────────────────────────────────────
-  const displayValue = hoverValue ?? currentValue;
+  // ── display value (respects mount animation) ───────────────────────────────
+  const displayValue = hoverValue ?? (animatedValue !== null ? animatedValue : currentValue);
   const getFill = index => {
-    const filled = displayValue - index;
-    if (filled >= 1) return 1;
-    if (filled > 0 && precision === 0.5) return 0.5;
+    const f = displayValue - index;
+    if (f >= 1) return 1;
+    if (f > 0 && precision === 0.5) return 0.5;
     return 0;
   };
-  const starPath = getStarPath(shape);
+
+  // ── icon renderer ──────────────────────────────────────────────────────────
+  const renderIcon = index => {
+    const fill = getFill(index);
+    const fillColor = fill === 0 ? resolvedEmpty : fill === 1 ? resolvedFilled : `url(#${uid}-g${index})`;
+
+    // 1️⃣  character mode — emoji or text
+    if (character !== undefined) {
+      const charContent = typeof character === "function" ? character({
+        fill,
+        index,
+        filled: resolvedFilled,
+        empty: resolvedEmpty
+      }) : character;
+      return /*#__PURE__*/jsxRuntime.jsx("span", {
+        className: "srx-character",
+        style: {
+          fontSize: sizeNum,
+          lineHeight: 1,
+          width: sizeNum,
+          height: sizeNum,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          filter: fill === 0 ? "grayscale(1) opacity(0.35)" : "none",
+          transition: "filter 0.2s ease"
+        },
+        children: charContent
+      });
+    }
+
+    // 2️⃣  customIcon mode — SVG path string or render fn
+    if (customIcon !== undefined) {
+      if (typeof customIcon === "function") {
+        return customIcon({
+          fill,
+          fillColor,
+          index,
+          size: sizeNum,
+          filled: resolvedFilled,
+          empty: resolvedEmpty
+        });
+      }
+      // string path
+      return /*#__PURE__*/jsxRuntime.jsx("svg", {
+        viewBox: "0 0 24 24",
+        width: sizeNum,
+        height: sizeNum,
+        "aria-hidden": true,
+        focusable: "false",
+        children: /*#__PURE__*/jsxRuntime.jsx("path", {
+          d: customIcon,
+          fill: fillColor,
+          stroke: resolvedStroke,
+          strokeWidth: strokeWidth,
+          strokeLinejoin: "round"
+        })
+      });
+    }
+
+    // 3️⃣  default built-in shape
+    return /*#__PURE__*/jsxRuntime.jsx("svg", {
+      viewBox: "0 0 24 24",
+      width: sizeNum,
+      height: sizeNum,
+      "aria-hidden": true,
+      focusable: "false",
+      children: /*#__PURE__*/jsxRuntime.jsx("path", {
+        d: getStarPath(shape),
+        fill: fillColor,
+        stroke: resolvedStroke,
+        strokeWidth: strokeWidth,
+        strokeLinejoin: "round"
+      })
+    });
+  };
 
   // ── render ─────────────────────────────────────────────────────────────────
   return /*#__PURE__*/jsxRuntime.jsxs("span", {
     ref: ref,
     className: `srx-root ${disabled ? "srx-disabled" : ""} ${className}`,
     style: {
-      ...themeVars.cssVars,
       "--srx-filled": resolvedFilled,
       "--srx-empty": resolvedEmpty,
       "--srx-stroke": resolvedStroke,
@@ -210,8 +315,7 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
     children: [/*#__PURE__*/jsxRuntime.jsx("svg", {
       width: "0",
       height: "0",
-      "aria-hidden": "true",
-      focusable: "false",
+      "aria-hidden": true,
       style: {
         position: "absolute"
       },
@@ -236,11 +340,10 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
     }), Array.from({
       length: count
     }, (_, index) => {
-      const fill = getFill(index);
       const isSelected = highlightSelected && index + 1 === Math.ceil(currentValue);
       const tooltip = tooltips?.[index] ?? `${index + 1} star${index !== 0 ? "s" : ""}`;
       return /*#__PURE__*/jsxRuntime.jsx("span", {
-        className: `srx-star ${activeIndex === index ? `srx-anim-${animation}` : ""} ${isSelected ? "srx-selected" : ""}`,
+        className: ["srx-star", activeIndex === index && animation !== "none" ? `srx-anim-${animation}` : "", isSelected ? "srx-selected" : ""].join(" ").trim(),
         style: {
           width: sizeNum,
           height: sizeNum
@@ -249,26 +352,119 @@ const StarRating = /*#__PURE__*/react.forwardRef(function StarRating({
         "aria-label": tooltip,
         onClick: e => handleClick(e, index),
         onMouseMove: e => handleMouseMove(e, index),
-        children: /*#__PURE__*/jsxRuntime.jsx("svg", {
-          viewBox: "0 0 24 24",
-          width: sizeNum,
-          height: sizeNum,
-          xmlns: "http://www.w3.org/2000/svg",
-          "aria-hidden": "true",
-          focusable: "false",
-          children: /*#__PURE__*/jsxRuntime.jsx("path", {
-            d: starPath,
-            fill: fill === 0 ? resolvedEmpty : fill === 1 ? resolvedFilled : `url(#${uid}-g${index})`,
-            stroke: resolvedStroke,
-            strokeWidth: strokeWidth,
-            strokeLinejoin: "round"
-          })
-        })
+        children: renderIcon(index)
       }, index);
     }), showValue && /*#__PURE__*/jsxRuntime.jsx("span", {
       className: "srx-value",
       "aria-hidden": "true",
       children: displayValue.toFixed(precision === 0.5 ? 1 : 0)
+    })]
+  });
+});
+
+const RatingGroup = /*#__PURE__*/react.forwardRef(function RatingGroup({
+  categories = [],
+  values: controlledValues,
+  defaultValues = {},
+  onChange,
+  showAverage = false,
+  showValues = false,
+  labelWidth = 120,
+  gap = 6,
+  size = 28,
+  theme = "gold",
+  ...starProps
+}, ref) {
+  const isControlled = controlledValues !== undefined;
+  const [internalValues, setInternalValues] = react.useState(() => {
+    const init = {};
+    categories.forEach(({
+      key
+    }) => {
+      init[key] = defaultValues[key] ?? 0;
+    });
+    return init;
+  });
+  const currentValues = isControlled ? controlledValues : internalValues;
+  const handleChange = (key, val) => {
+    const next = {
+      ...currentValues,
+      [key]: val
+    };
+    if (!isControlled) setInternalValues(next);
+    onChange?.(key, val, next);
+  };
+  const average = categories.length > 0 ? categories.reduce((sum, {
+    key
+  }) => sum + (currentValues[key] ?? 0), 0) / categories.length : 0;
+  return /*#__PURE__*/jsxRuntime.jsxs("div", {
+    ref: ref,
+    className: "srx-group",
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 12
+    },
+    children: [categories.map(({
+      key,
+      label
+    }) => /*#__PURE__*/jsxRuntime.jsxs("div", {
+      className: "srx-group-row",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 12
+      },
+      children: [/*#__PURE__*/jsxRuntime.jsx("span", {
+        className: "srx-group-label",
+        style: {
+          width: labelWidth,
+          flexShrink: 0,
+          fontSize: size * 0.44,
+          color: "inherit",
+          fontWeight: 500,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap"
+        },
+        children: label
+      }), /*#__PURE__*/jsxRuntime.jsx(StarRating, {
+        value: currentValues[key] ?? 0,
+        onChange: val => handleChange(key, val),
+        size: size,
+        gap: gap,
+        theme: theme,
+        showValue: showValues,
+        ...starProps
+      })]
+    }, key)), showAverage && categories.length > 0 && /*#__PURE__*/jsxRuntime.jsxs("div", {
+      className: "srx-group-average",
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        paddingTop: 8,
+        borderTop: "1px solid #e5e7eb",
+        marginTop: 4
+      },
+      children: [/*#__PURE__*/jsxRuntime.jsx("span", {
+        style: {
+          width: labelWidth,
+          flexShrink: 0,
+          fontSize: size * 0.44,
+          fontWeight: 700,
+          color: "inherit"
+        },
+        children: "Overall"
+      }), /*#__PURE__*/jsxRuntime.jsx(StarRating, {
+        value: +average.toFixed(1),
+        precision: 0.5,
+        size: size,
+        gap: gap,
+        theme: theme,
+        readOnly: true,
+        showValue: true
+      })]
     })]
   });
 });
@@ -311,6 +507,7 @@ function useRating({
   };
 }
 
+exports.RatingGroup = RatingGroup;
 exports.SHAPE_PATHS = SHAPE_PATHS;
 exports.StarRating = StarRating;
 exports.THEME_NAMES = THEME_NAMES;

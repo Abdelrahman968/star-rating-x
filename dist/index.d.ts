@@ -2,88 +2,126 @@ import * as React from "react";
 
 // ── Shapes ────────────────────────────────────────────────────────────────────
 export type StarShape =
-  | "star"
-  | "heart"
-  | "circle"
-  | "diamond"
-  | "thumb"
-  | "flag"
-  | "lightning"
-  | "flower";
+  | "star" | "heart" | "circle" | "diamond"
+  | "thumb" | "flag"  | "lightning" | "flower";
 
 // ── Themes ────────────────────────────────────────────────────────────────────
 export type ThemeName =
-  | "gold"
-  | "fire"
-  | "ocean"
-  | "neon"
-  | "rose"
-  | "mono"
-  | "violet"
-  | "sunset"
-  | "mint";
+  | "gold" | "fire" | "ocean" | "neon" | "rose"
+  | "mono" | "violet" | "sunset" | "mint";
 
 // ── Animations ────────────────────────────────────────────────────────────────
 export type AnimationType = "bounce" | "pulse" | "wiggle" | "pop" | "none";
 
+// ── Icon render context ───────────────────────────────────────────────────────
+export interface IconRenderContext {
+  fill: number;        // 0 | 0.5 | 1
+  fillColor: string;   // resolved fill colour / gradient url
+  index: number;
+  size: number;
+  filled: string;      // resolved filled colour
+  empty: string;       // resolved empty colour
+}
+
+// ── Character render context ──────────────────────────────────────────────────
+export interface CharacterRenderContext {
+  fill: number;
+  index: number;
+  filled: string;
+  empty: string;
+}
+
 // ── StarRating Props ──────────────────────────────────────────────────────────
 export interface StarRatingProps {
-  /** Controlled value (0 – count) */
+  // state
   value?: number;
-  /** Uncontrolled initial value */
   defaultValue?: number;
-  /** Total number of stars (default 5) */
   count?: number;
-  /** Rating precision – 1 (whole) or 0.5 (half-star) */
   precision?: 1 | 0.5;
-  /** Star size in px (default 32) */
+
+  // appearance
   size?: number | string;
-  /** Gap between stars in px (default 6) */
   gap?: number;
-  /** Icon shape */
   shape?: StarShape;
-  /** Preset colour theme */
   theme?: ThemeName;
-  /** Override the filled star colour */
   filledColor?: string;
-  /** Override the empty star colour */
   emptyColor?: string;
-  /** Override the stroke colour */
   strokeColor?: string;
-  /** SVG stroke width (default 1.5) */
   strokeWidth?: number;
-  /** Disable interaction (keeps styling) */
+
+  /**
+   * Render an emoji, text, or custom element instead of the built-in SVG icon.
+   * @example character="😊"
+   * @example character={({ fill }) => <MyIcon opacity={fill} />}
+   */
+  character?: string | ((ctx: CharacterRenderContext) => React.ReactNode);
+
+  /**
+   * Replace the built-in SVG shape with a custom SVG path string or render fn.
+   * @example customIcon="M12 2 L15 9 L22 9…"
+   * @example customIcon={({ fillColor, size }) => <svg>…</svg>}
+   */
+  customIcon?: string | ((ctx: IconRenderContext) => React.ReactNode);
+
+  /** Animate stars filling up on first mount */
+  mountAnimation?: boolean;
+  /** Duration of mount animation in ms (default 800) */
+  mountDuration?: number;
+
+  // behaviour
   readOnly?: boolean;
-  /** Fully disable + grey-out */
   disabled?: boolean;
-  /** Clicking the currently-selected value resets to 0 (default true) */
   allowClear?: boolean;
-  /** Show the numeric value label next to the stars */
   showValue?: boolean;
-  /** Custom tooltip labels, one per star */
   tooltips?: string[];
-  /** Click animation style */
   animation?: AnimationType;
-  /** Layout direction */
   direction?: "ltr" | "rtl";
-  /** Highlight ring on the selected star */
   highlightSelected?: boolean;
-  /** Accessible ARIA label (default "Rating") */
+
+  // a11y
   label?: string;
-  /** Called with the new value when user selects */
+
+  // callbacks
   onChange?: (value: number) => void;
-  /** Called with hovered value, or null when cursor leaves */
   onHoverChange?: (value: number | null) => void;
+
   className?: string;
   style?: React.CSSProperties;
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
 export declare const StarRating: React.ForwardRefExoticComponent<
   StarRatingProps & React.RefAttributes<HTMLSpanElement>
 >;
 
 export default StarRating;
+
+// ── RatingGroup ───────────────────────────────────────────────────────────────
+export interface RatingCategory {
+  /** Unique identifier used as the key in the values map */
+  key: string;
+  /** Human-readable label shown next to the stars */
+  label: string;
+}
+
+export interface RatingGroupProps extends Omit<StarRatingProps, "value" | "defaultValue" | "onChange" | "showValue"> {
+  categories: RatingCategory[];
+  /** Controlled values map — { [key]: number } */
+  values?: Record<string, number>;
+  /** Uncontrolled initial values */
+  defaultValues?: Record<string, number>;
+  /** Called whenever any category rating changes */
+  onChange?: (key: string, value: number, allValues: Record<string, number>) => void;
+  /** Show an "Overall" average row at the bottom */
+  showAverage?: boolean;
+  /** Show numeric value next to each row's stars */
+  showValues?: boolean;
+  /** Width of the label column in px (default 120) */
+  labelWidth?: number;
+}
+
+export declare const RatingGroup: React.ForwardRefExoticComponent<
+  RatingGroupProps & React.RefAttributes<HTMLDivElement>
+>;
 
 // ── useRating hook ────────────────────────────────────────────────────────────
 export interface UseRatingOptions {
@@ -109,7 +147,6 @@ export declare function useRating(options?: UseRatingOptions): UseRatingResult;
 // ── Helpers ───────────────────────────────────────────────────────────────────
 export declare const SHAPE_PATHS: Record<StarShape, string>;
 export declare function getStarPath(shape?: StarShape): string;
-
 export declare const THEME_NAMES: ThemeName[];
 export declare function getThemeVars(themeName?: ThemeName): {
   filled: string;
@@ -117,3 +154,4 @@ export declare function getThemeVars(themeName?: ThemeName): {
   stroke: string;
   cssVars: Record<string, string>;
 };
+
