@@ -5,13 +5,18 @@ import StarRating from "./StarRating.jsx";
  * RatingGroup — rate multiple categories at once.
  *
  * Props:
- *  categories   {Array<{key, label}>}   List of categories to rate
- *  values       {Record<string,number>} Controlled values map
- *  defaultValues {Record<string,number>} Uncontrolled initial values
- *  onChange     {fn(key, value, allValues)} Called on any change
- *  showAverage  {bool}   Show overall average at the bottom (default false)
- *  showValues   {bool}   Show numeric value per row (default false)
- *  labelWidth   {number} Width of the label column in px (default 120)
+ *  categories      {Array<{key, label}>}    List of categories to rate
+ *  values          {Record<string,number>}  Controlled values map
+ *  defaultValues   {Record<string,number>}  Uncontrolled initial values
+ *  onChange        {fn(key, value, allValues)}
+ *  showAverage     {bool}    Show average row at the bottom (default false)
+ *  overallLabel    {string}  Text for the average row (default "Overall")
+ *  averagePrecision {0.5|1}  Precision of the average stars (default 0.5)
+ *  showValues      {bool}    Show numeric value per row (default false)
+ *  labelWidth      {number}  Width of the label column in px (default 120)
+ *  rowGap          {number}  Gap between rows in px (default 12)
+ *  dividerColor    {string}  Colour of the divider above the average row
+ *  averageLabelStyle {object} Extra style for the overall label
  *  -- All other StarRating props are forwarded to every row --
  */
 const RatingGroup = forwardRef(function RatingGroup(
@@ -21,8 +26,13 @@ const RatingGroup = forwardRef(function RatingGroup(
     defaultValues = {},
     onChange,
     showAverage = false,
+    overallLabel = "Overall",          // ← NEW: fully customisable label
+    averagePrecision = 0.5,            // ← NEW: precision for the average row
     showValues = false,
     labelWidth = 120,
+    rowGap = 12,                       // ← NEW: gap between rows
+    dividerColor = "#e5e7eb",          // ← NEW: divider colour
+    averageLabelStyle = {},            // ← NEW: custom style for overall label
     gap = 6,
     size = 28,
     theme = "gold",
@@ -57,7 +67,7 @@ const RatingGroup = forwardRef(function RatingGroup(
     <div
       ref={ref}
       className="srx-group"
-      style={{ display: "flex", flexDirection: "column", gap: 12 }}
+      style={{ display: "flex", flexDirection: "column", gap: rowGap }}
     >
       {categories.map(({ key, label }) => (
         <div
@@ -104,7 +114,7 @@ const RatingGroup = forwardRef(function RatingGroup(
             alignItems: "center",
             gap: 12,
             paddingTop: 8,
-            borderTop: "1px solid #e5e7eb",
+            borderTop: `1px solid ${dividerColor}`,
             marginTop: 4,
           }}
         >
@@ -115,13 +125,14 @@ const RatingGroup = forwardRef(function RatingGroup(
               fontSize: size * 0.44,
               fontWeight: 700,
               color: "inherit",
+              ...averageLabelStyle,
             }}
           >
-            Overall
+            {overallLabel}
           </span>
           <StarRating
-            value={+average.toFixed(1)}
-            precision={0.5}
+            value={+average.toFixed(averagePrecision === 0.5 ? 1 : 0)}
+            precision={averagePrecision}
             size={size}
             gap={gap}
             theme={theme}

@@ -110,3 +110,36 @@
   font-weight: 600;
   min-width: 2.5ch;
 }
+
+/* ── glow effect ──────────────────────────────────────────────────────────── */
+.srx-glow .srx-star svg {
+  filter: drop-shadow(0 0 calc(var(--srx-size, 32px) * 0.25 * var(--srx-glow-intensity, 0.5)) var(--srx-glow-color, #FBBF24));
+  transition: filter 0.2s ease;
+}
+.srx-glow .srx-star:hover svg {
+  filter: drop-shadow(0 0 calc(var(--srx-size, 32px) * 0.4 * var(--srx-glow-intensity, 0.5)) var(--srx-glow-color, #FBBF24));
+}
+
+/* ── skeleton shimmer ─────────────────────────────────────────────────────── */
+@keyframes srx-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── rating prompt slide-in ───────────────────────────────────────────────── */
+@keyframes srx-prompt-in {
+  0%   { opacity: 0; transform: translateY(12px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes srx-confetti-0 {
+  0%   { transform: translate(0,0) scale(1); opacity: 1; }
+  100% { transform: translate(0, -36px) scale(0); opacity: 0; }
+}
+@keyframes srx-confetti-1 {
+  0%   { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translate(12px,-28px) rotate(180deg) scale(0); opacity: 0; }
+}
+@keyframes srx-confetti-2 {
+  0%   { transform: translate(0,0) rotate(0deg) scale(1); opacity: 1; }
+  100% { transform: translate(-10px,-32px) rotate(-140deg) scale(0); opacity: 0; }
+}

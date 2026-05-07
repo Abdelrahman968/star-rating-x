@@ -1,7 +1,7 @@
 {
   "name": "star-rating-x",
-  "version": "2.0.0",
-  "description": "A fully-featured, accessible, customisable React star-rating component with themes, shapes, animations and half-star precision.",
+  "version": "5.0.0",
+  "description": "A fully-featured, accessible, customisable React rating library. 10 components, 5 hooks, TypeScript, zero dependencies.",
   "keywords": [
     "react",
     "rating",
@@ -11,12 +11,18 @@
     "review",
     "accessible",
     "customisable",
-    "typescript"
+    "typescript",
+    "review",
+    "analytics",
+    "wall",
+    "badge",
+    "summary",
+    "prompt",
+    "persistence",
+    "glow",
+    "skeleton"
   ],
-  "author": {
-    "name": "Abdelrahman Ayman",
-    "url": "https://linkedin.com/in/abdelrahman968"
-  },
+  "author": "Abdelrahman Ayman",
   "license": "MIT",
   "main": "dist/index.cjs.js",
   "module": "dist/index.esm.js",
@@ -58,13 +64,5 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Abdelrahman968/star-rating-x"
-  },
-  "homepage": "https://star-rating-x-demo.vercel.app",
-  "bugs": {
-    "url": "https://github.com/Abdelrahman968/star-rating-x/issues"
-  },
-  "funding": {
-    "type": "individual",
-    "url": "https://linkedin.com/in/abdelrahman968"
   }
 }

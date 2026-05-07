@@ -46,12 +46,40 @@ const StarRating = forwardRef(function StarRating(
     strokeWidth = 1.5,
 
     // NEW: custom icon / character
-    character,       // emoji/text/render-fn — renders instead of SVG
-    customIcon,      // SVG path string or render-fn — replaces built-in shape
+    character,
+    customIcon,
 
     // NEW: mount animation
     mountAnimation = false,
     mountDuration = 800,
+
+    // NEW v4: gradient fill
+    filledGradient,          // e.g. ["#FBBF24","#F97316"] — overrides filledColor
+    gradientDirection = "horizontal", // "horizontal" | "vertical" | "diagonal"
+
+    // NEW v4: compare mode
+    compareValue,            // second "ghost" rating to display behind the main one
+    compareLabel = "avg",    // label shown next to the compare value
+
+    // NEW v4: celebrate on max rating
+    celebrateOnMax = false,
+    confettiColors = ["#FBBF24", "#F97316", "#EC4899", "#8B5CF6", "#3B82F6"],
+
+    // NEW v5: glow effect
+    glowEffect = false,
+    glowIntensity = 0.5,
+
+    // NEW v5: skeleton / loading state
+    loading = false,
+
+    // NEW v5: debounced complete callback
+    onRatingComplete,
+    debounceMs = 0,
+
+    // NEW v5: undo last rating
+    allowUndo = false,
+    undoTimeout = 4000,
+    onUndo,
 
     // behaviour
     readOnly = false,
@@ -114,6 +142,35 @@ const StarRating = forwardRef(function StarRating(
   const resolvedStroke = strokeColor || themeVars.stroke;
   const sizeNum = typeof size === "number" ? size : parseInt(size, 10);
 
+  // ── gradient fill ──────────────────────────────────────────────────────────
+  // filledGradient overrides filledColor when provided
+  const gradId = `${uid}-grad-fill`;
+  const gradientAngle =
+    gradientDirection === "vertical"  ? "0 0 0 1" :
+    gradientDirection === "diagonal"  ? "0 0 1 1" :
+                                        "0 0 1 0"; // horizontal (default)
+  const [gx1, gy1, gx2, gy2] = gradientAngle.split(" ");
+  const activeFill = filledGradient
+    ? `url(#${gradId})`
+    : resolvedFilled;
+
+  // ── confetti on max ────────────────────────────────────────────────────────
+  const [showConfetti, setShowConfetti] = useState(false);
+  const prevValueRef = React.useRef(currentValue);
+
+  useEffect(() => {
+    if (
+      celebrateOnMax &&
+      currentValue === count &&
+      prevValueRef.current !== count
+    ) {
+      setShowConfetti(true);
+      const t = setTimeout(() => setShowConfetti(false), 1400);
+      return () => clearTimeout(t);
+    }
+    prevValueRef.current = currentValue;
+  }, [currentValue, count, celebrateOnMax]);
+
   // ── value helpers ──────────────────────────────────────────────────────────
   const snapValue = useCallback(
     (raw) => (precision === 0.5 ? Math.round(raw * 2) / 2 : Math.round(raw)),
@@ -150,14 +207,39 @@ const StarRating = forwardRef(function StarRating(
   const handleClick = useCallback(
     (e, index) => {
       if (readOnly || disabled) return;
-      const val = getValueFromPointer(e, index);
+      const val  = getValueFromPointer(e, index);
       const next = allowClear && val === currentValue ? 0 : val;
+
+      // undo support
+      if (allowUndo) {
+        setUndoPrev(currentValue);
+        setUndoVisible(true);
+        if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+        undoTimerRef.current = setTimeout(() => {
+          setUndoVisible(false);
+          setUndoPrev(null);
+        }, undoTimeout);
+      }
+
       setActiveIndex(index);
       setTimeout(() => setActiveIndex(null), 500);
       if (!isControlled) setInternalValue(next);
       onChange?.(next);
+
+      // debounced onRatingComplete
+      if (onRatingComplete) {
+        if (completeTimerRef.current) clearTimeout(completeTimerRef.current);
+        if (debounceMs > 0) {
+          completeTimerRef.current = setTimeout(() => onRatingComplete(next), debounceMs);
+        } else {
+          onRatingComplete(next);
+        }
+      }
     },
-    [readOnly, disabled, getValueFromPointer, allowClear, currentValue, isControlled, onChange]
+    [
+      readOnly, disabled, getValueFromPointer, allowClear, currentValue,
+      allowUndo, undoTimeout, isControlled, onChange, onRatingComplete, debounceMs,
+    ]
   );
 
   const handleKeyDown = useCallback(
@@ -177,6 +259,46 @@ const StarRating = forwardRef(function StarRating(
     [readOnly, disabled, precision, currentValue, count, isControlled, onChange]
   );
 
+  // ── undo last rating ──────────────────────────────────────────────────────
+  const [undoPrev, setUndoPrev]       = useState(null);
+  const [undoVisible, setUndoVisible] = useState(false);
+  const undoTimerRef   = React.useRef(null);
+  const completeTimerRef = React.useRef(null);
+
+  // ── loading skeleton ───────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <span
+        ref={ref}
+        className={`srx-root srx-skeleton ${className}`}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: `${typeof gap === "number" ? gap : 6}px`,
+          ...style,
+        }}
+        aria-busy="true"
+        aria-label="Loading rating..."
+      >
+        {Array.from({ length: count }, (_, i) => (
+          <span
+            key={i}
+            style={{
+              width:  typeof size === "number" ? size : 32,
+              height: typeof size === "number" ? size : 32,
+              borderRadius: "50%",
+              background: "linear-gradient(90deg,#1e293b 25%,#334155 50%,#1e293b 75%)",
+              backgroundSize: "200% 100%",
+              animation: "srx-shimmer 1.4s infinite",
+              display: "inline-block",
+              flexShrink: 0,
+            }}
+          />
+        ))}
+      </span>
+    );
+  }
+
   // ── display value (respects mount animation) ───────────────────────────────
   const displayValue = hoverValue ?? (animatedValue !== null ? animatedValue : currentValue);
 
@@ -190,7 +312,10 @@ const StarRating = forwardRef(function StarRating(
   // ── icon renderer ──────────────────────────────────────────────────────────
   const renderIcon = (index) => {
     const fill = getFill(index);
-    const fillColor = fill === 0 ? resolvedEmpty : fill === 1 ? resolvedFilled : `url(#${uid}-g${index})`;
+    const fillColor =
+      fill === 0 ? resolvedEmpty :
+      fill === 1 ? activeFill :
+      `url(#${uid}-g${index})`;
 
     // 1️⃣  character mode — emoji or text
     if (character !== undefined) {
@@ -254,15 +379,18 @@ const StarRating = forwardRef(function StarRating(
   return (
     <span
       ref={ref}
-      className={`srx-root ${disabled ? "srx-disabled" : ""} ${className}`}
+      className={`srx-root ${disabled ? "srx-disabled" : ""} ${glowEffect ? "srx-glow" : ""} ${className}`}
       style={{
         "--srx-filled": resolvedFilled,
         "--srx-empty":  resolvedEmpty,
         "--srx-stroke": resolvedStroke,
         "--srx-size":   `${sizeNum}px`,
         "--srx-gap":    `${gap}px`,
+        "--srx-glow-color": resolvedFilled,
+        "--srx-glow-intensity": glowIntensity,
         gap: `${gap}px`,
         flexDirection: direction === "rtl" ? "row-reverse" : "row",
+        position: "relative",
         ...style,
       }}
       role="slider"
@@ -277,17 +405,119 @@ const StarRating = forwardRef(function StarRating(
       onKeyDown={handleKeyDown}
       onMouseLeave={handleMouseLeave}
     >
-      {/* gradient defs for half-star fills */}
+      {/* gradient defs for half-star fills + custom gradient fill */}
       <svg width="0" height="0" aria-hidden style={{ position: "absolute" }}>
         <defs>
+          {/* half-star gradient per star */}
           {Array.from({ length: count }, (_, i) => (
             <linearGradient key={i} id={`${uid}-g${i}`} x1="0" x2="1" y1="0" y2="0">
-              <stop offset={`${getFill(i) * 100}%`} stopColor={resolvedFilled} />
+              <stop offset={`${getFill(i) * 100}%`} stopColor={activeFill.startsWith("url") ? resolvedFilled : activeFill} />
               <stop offset={`${getFill(i) * 100}%`} stopColor={resolvedEmpty} />
             </linearGradient>
           ))}
+          {/* custom gradient fill */}
+          {filledGradient && filledGradient.length >= 2 && (
+            <linearGradient id={gradId} x1={gx1} y1={gy1} x2={gx2} y2={gy2}>
+              {filledGradient.map((color, i) => (
+                <stop
+                  key={i}
+                  offset={`${(i / (filledGradient.length - 1)) * 100}%`}
+                  stopColor={color}
+                />
+              ))}
+            </linearGradient>
+          )}
         </defs>
       </svg>
+
+      {/* confetti burst */}
+      {showConfetti && (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%,-50%)",
+            pointerEvents: "none",
+            zIndex: 20,
+          }}
+        >
+          {Array.from({ length: 18 }, (_, i) => {
+            const angle = (i / 18) * 360;
+            const color = confettiColors[i % confettiColors.length];
+            const dist  = 28 + Math.random() * 22;
+            const rad   = (angle * Math.PI) / 180;
+            return (
+              <span
+                key={i}
+                style={{
+                  position: "absolute",
+                  width: 5 + Math.random() * 4,
+                  height: 5 + Math.random() * 4,
+                  borderRadius: Math.random() > 0.5 ? "50%" : 2,
+                  background: color,
+                  left: `calc(50% + ${Math.cos(rad) * dist}px)`,
+                  top:  `calc(50% + ${Math.sin(rad) * dist}px)`,
+                  animation: `srx-confetti-${i % 3} 1.2s ease-out forwards`,
+                  opacity: 1,
+                }}
+              />
+            );
+          })}
+        </span>
+      )}
+
+      {/* compareValue ghost layer — rendered behind main stars */}
+      {compareValue !== undefined && (
+        <span
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            display: "inline-flex",
+            gap: `${gap}px`,
+            pointerEvents: "none",
+            opacity: 0.28,
+          }}
+        >
+          {Array.from({ length: count }, (_, index) => {
+            const f = compareValue - index;
+            const fc =
+              f >= 1 ? resolvedFilled :
+              f > 0  ? `url(#${uid}-cg${index})` :
+              resolvedEmpty;
+            return (
+              <span
+                key={index}
+                style={{ width: sizeNum, height: sizeNum, display: "inline-flex" }}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width={sizeNum}
+                  height={sizeNum}
+                  aria-hidden
+                >
+                  <defs>
+                    <linearGradient id={`${uid}-cg${index}`} x1="0" x2="1" y1="0" y2="0">
+                      <stop offset={`${Math.max(0, Math.min(1, f)) * 100}%`} stopColor={resolvedFilled} />
+                      <stop offset={`${Math.max(0, Math.min(1, f)) * 100}%`} stopColor={resolvedEmpty} />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={getStarPath(shape)}
+                    fill={fc}
+                    stroke={resolvedStroke}
+                    strokeWidth={strokeWidth}
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            );
+          })}
+        </span>
+      )}
 
       {Array.from({ length: count }, (_, index) => {
         const isSelected = highlightSelected && index + 1 === Math.ceil(currentValue);
@@ -315,6 +545,73 @@ const StarRating = forwardRef(function StarRating(
       {showValue && (
         <span className="srx-value" aria-hidden="true">
           {displayValue.toFixed(precision === 0.5 ? 1 : 0)}
+        </span>
+      )}
+
+      {/* compareValue badge */}
+      {compareValue !== undefined && (
+        <span
+          aria-hidden
+          style={{
+            marginLeft: 6,
+            fontSize: sizeNum * 0.4,
+            color: resolvedFilled,
+            opacity: 0.55,
+            fontWeight: 600,
+            whiteSpace: "nowrap",
+          }}
+        >
+          {compareLabel} {compareValue.toFixed(1)}
+        </span>
+      )}
+
+      {/* undo toast */}
+      {allowUndo && undoVisible && undoPrev !== null && (
+        <span
+          aria-live="polite"
+          style={{
+            position: "absolute",
+            bottom: "calc(100% + 8px)",
+            left: "50%",
+            transform: "translateX(-50%)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 8,
+            background: "#1e293b",
+            border: `1px solid ${resolvedFilled}40`,
+            borderRadius: 10,
+            padding: "6px 12px",
+            fontSize: 12,
+            fontWeight: 600,
+            color: "#f1f5f9",
+            whiteSpace: "nowrap",
+            zIndex: 50,
+            boxShadow: "0 4px 20px #00000040",
+          }}
+        >
+          <span style={{ color: "#94a3b8" }}>Changed from {undoPrev}★</span>
+          <button
+            onClick={() => {
+              if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+              if (!isControlled) setInternalValue(undoPrev);
+              onChange?.(undoPrev);
+              onUndo?.(undoPrev);
+              setUndoVisible(false);
+              setUndoPrev(null);
+            }}
+            style={{
+              background: resolvedFilled + "20",
+              border: `1px solid ${resolvedFilled}40`,
+              borderRadius: 6,
+              color: resolvedFilled,
+              fontWeight: 700,
+              fontSize: 11,
+              padding: "2px 8px",
+              cursor: "pointer",
+            }}
+          >
+            Undo
+          </button>
         </span>
       )}
     </span>
